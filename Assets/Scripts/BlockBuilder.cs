@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Cinemachine;
 
 public class BlockBuilder : MonoBehaviour
 {
@@ -17,20 +18,31 @@ public class BlockBuilder : MonoBehaviour
 	public int CurrentBlock;
 	public int CurrentColor;
 
+	public SoundEffects MySoundEffects;
+
 	[Header("Camera")]
 	public float MinCameraZoom;
 	public float MaxCameraZoom;
 	private Camera mainCamera;
+	public CinemachineVirtualCamera myVirtualCamera;
+	public CinemachineBasicMultiChannelPerlin myCameraShake;
 	private bool disableZoom;
 	public float PanningSpeed;
 	private Vector3 mouseDelta;
 	private Vector3 prevMouse;
+	public float shakeTimer = 0f;
+
+	public bool HasBlockSelected
+	{
+		get { return BlockGhost != null; }
+	}
 
 	// Start is called before the first frame update
 	void Start()
 	{
 		ExistingBlocks.AddRange(transform.GetComponentsInChildren<Block>());
 		mainCamera = Camera.main;
+		myCameraShake = myVirtualCamera.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
 	}
 
 	// Update is called once per frame
@@ -59,18 +71,8 @@ public class BlockBuilder : MonoBehaviour
 	/// </summary>
 	private void UpdatePlaceBlocks()
 	{
-		if (BlockGhost == null)
+		if (!HasBlockSelected)
 		{
-			// Right click to create a new block (random for now)
-			if (Input.GetKeyDown(KeyCode.Mouse1))
-			{
-				GameObject prefab = BlockPrefabs[CurrentBlock];
-				BlockGhost = Instantiate(prefab, GetMouseWorld(), Quaternion.identity, transform).GetComponent<Block>();
-				BlockGhost.InitBlock(this);
-				BlockGhost.SetColor(PossibleColors[CurrentColor]);
-				ExistingBlocks.Add(BlockGhost);
-			}
-
 			// Left click to pickup existing blocks
 			if (Input.GetKeyDown(KeyCode.Mouse0))
 			{
@@ -103,10 +105,10 @@ public class BlockBuilder : MonoBehaviour
 				}
 				else if (changeBlock)
 				{
-					CurrentBlock++;
-					if (CurrentBlock >= BlockPrefabs.Count)
-						CurrentBlock = 0;
-					RefreshBlockObject();
+					//CurrentBlock++;
+					//if (CurrentBlock >= BlockPrefabs.Count)
+					//	CurrentBlock = 0;
+					//RefreshBlockObject();
 				}
 			}
 			else if (mouseWheel < -0.01f)
@@ -120,10 +122,10 @@ public class BlockBuilder : MonoBehaviour
 				}
 				else if (changeBlock)
 				{
-					CurrentBlock--;
-					if (CurrentBlock < 0)
-						CurrentBlock = BlockPrefabs.Count - 1;
-					RefreshBlockObject();
+					//CurrentBlock--;
+					//if (CurrentBlock < 0)
+					//	CurrentBlock = BlockPrefabs.Count - 1;
+					//RefreshBlockObject();
 				}
 			}
 
@@ -141,10 +143,13 @@ public class BlockBuilder : MonoBehaviour
 				if (BlockGhost.ConnectBlock())
 				{
 					BlockGhost = null;
+					TriggerShake(0.25f, 0.5f, 0.25f);
+					MySoundEffects.PlayClick();
 				}
 				else if (BlockGhost.PlaceBlockInAir())
 				{
 					BlockGhost = null;
+					MySoundEffects.PlayClick();
 				}
 			}
 
@@ -154,6 +159,17 @@ public class BlockBuilder : MonoBehaviour
 				BlockGhost.Rotate(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
 			}
 		}
+	}
+
+	/// <summary>
+	/// Sets up the block ghost with the given prefab.
+	/// </summary>
+	public void CreateBlockGhost(GameObject _prefab)
+	{
+		BlockGhost = Instantiate(_prefab, GetMouseWorld(), Quaternion.identity, transform).GetComponent<Block>();
+		BlockGhost.InitBlock(this);
+		BlockGhost.SetColor(PossibleColors[CurrentColor]);
+		ExistingBlocks.Add(BlockGhost);
 	}
 
 	/// <summary>
@@ -167,15 +183,15 @@ public class BlockBuilder : MonoBehaviour
 			float mouseWheel = Input.GetAxis("Mouse ScrollWheel");
 			if (mouseWheel > 0.01f)
 			{
-				mainCamera.orthographicSize--;
-				if (mainCamera.orthographicSize < MinCameraZoom)
-					mainCamera.orthographicSize = MinCameraZoom;
+				myVirtualCamera.m_Lens.OrthographicSize--;
+				if (myVirtualCamera.m_Lens.OrthographicSize < MinCameraZoom)
+					myVirtualCamera.m_Lens.OrthographicSize = MinCameraZoom;
 			}
 			else if (mouseWheel < -0.01f)
 			{
-				mainCamera.orthographicSize++;
-				if (mainCamera.orthographicSize > MaxCameraZoom)
-					mainCamera.orthographicSize = MaxCameraZoom;
+				myVirtualCamera.m_Lens.OrthographicSize++;
+				if (myVirtualCamera.m_Lens.OrthographicSize > MaxCameraZoom)
+					myVirtualCamera.m_Lens.OrthographicSize = MaxCameraZoom;
 			}
 		}
 
@@ -184,7 +200,41 @@ public class BlockBuilder : MonoBehaviour
 		Cursor.visible = !panning;
 		if (panning)
 		{
-			mainCamera.transform.Translate(-mouseDelta * PanningSpeed * mainCamera.orthographicSize * Time.deltaTime);
+			myVirtualCamera.transform.Translate(-mouseDelta * PanningSpeed * mainCamera.orthographicSize * Time.deltaTime);
+		}
+
+		// Recenter camera
+		if (Input.GetKeyDown(KeyCode.Z))
+		{
+			myVirtualCamera.transform.position = new Vector3(0f, 0f, -10f);
+		}
+
+		UpdateCameraShake();
+	}
+
+	/// <summary>
+	/// Triggers a camera shake based on the given parameters.
+	/// </summary>
+	public void TriggerShake(float amp, float freq, float duration)
+	{
+		myCameraShake.m_AmplitudeGain = amp;
+		myCameraShake.m_FrequencyGain = freq;
+		shakeTimer = duration;
+	}
+
+	/// <summary>
+	/// Update the timer and logic for camera shaking.
+	/// </summary>
+	private void UpdateCameraShake()
+	{
+		if (shakeTimer > 0f)
+		{
+			shakeTimer -= Time.deltaTime;
+			if (shakeTimer <= 0f)
+			{
+				myCameraShake.m_AmplitudeGain = 0f;
+				myCameraShake.m_FrequencyGain = 0f;
+			}
 		}
 	}
 
