@@ -4,7 +4,10 @@ using UnityEngine;
 
 public class Block : MonoBehaviour
 {
+	private BlockBuilder builderRef;
+
 	public bool Placing;
+	public CardinalDirection MyDirection;
 
 	public LayerMask BodyMask;
 	public LayerMask PositiveMask;
@@ -12,14 +15,16 @@ public class Block : MonoBehaviour
 
 	public Collider bodyCollider;
 	public SphereCollider overlapCollider;
-	public List<Collider> positiveConnectors;
-	public List<Collider> negativeConnectors;
+	public List<Collider> positiveConnectors = new List<Collider>();
+	public List<Collider> negativeConnectors = new List<Collider>();
+	public List<GameObject> connectorIcons = new List<GameObject>();
 
 	private List<SpriteRenderer> myRenderers;
 
 	// Start is called before the first frame update
 	void Awake()
 	{
+		MyDirection = CardinalDirection.Up;
 		InitConnectors();
 		myRenderers = new List<SpriteRenderer>();
 		myRenderers.AddRange(GetComponentsInChildren<SpriteRenderer>());
@@ -29,6 +34,12 @@ public class Block : MonoBehaviour
 	void Update()
 	{
 
+	}
+
+	public void InitBlock(BlockBuilder _builder)
+	{
+		builderRef = _builder;
+		ShowConnectorIcons(builderRef.ShowIcons);
 	}
 
 	/// <summary>
@@ -42,6 +53,15 @@ public class Block : MonoBehaviour
 		positiveConnectors.AddRange(positives.GetComponentsInChildren<Collider>());
 		negativeConnectors.AddRange(negatives.GetComponentsInChildren<Collider>());
 
+		foreach (Collider positive in positiveConnectors)
+		{
+			connectorIcons.Add(positive.transform.Find("Icon").gameObject);
+		}
+		foreach (Collider negative in negativeConnectors)
+		{
+			connectorIcons.Add(negative.transform.Find("Icon").gameObject);
+		}
+
 		bodyCollider = transform.Find("Body").GetComponent<Collider>();
 		overlapCollider = transform.Find("OverlapZone").GetComponent<SphereCollider>();
 	}
@@ -49,7 +69,7 @@ public class Block : MonoBehaviour
 	/// <summary>
 	/// Handles snapping the block onto an existing one.
 	/// </summary>
-	public bool PlaceBlock()
+	public bool ConnectBlock()
 	{
 		// First, take note of all nearby other blocks. If none are found, break out early.
 		List<Collider> otherBodies = new List<Collider>();
@@ -111,7 +131,7 @@ public class Block : MonoBehaviour
 
 		// At this point, some sort of valid connection should have been found. Now we have to move the block accordingly and verify we don't overlap in the new position.
 		Vector3 connectionDelta = otherConnector.transform.position - myConnector.transform.position;
-		transform.Translate(connectionDelta);
+		transform.Translate(connectionDelta, Space.World);
 		foreach (Collider otherCollider in otherBodies)
 		{
 			if (bodyCollider.bounds.Intersects(otherCollider.bounds))
@@ -124,6 +144,42 @@ public class Block : MonoBehaviour
 	}
 
 	/// <summary>
+	/// Will attempt to place the block in the air
+	/// </summary>
+	/// <returns></returns>
+	public bool PlaceBlockInAir()
+	{
+		// temp until we find a solution for rounding to nearest 0.5
+		// solution: round(num*2)/2
+
+		// First, take note of all nearby other blocks. If any are found, break out early.
+		List<Collider> otherBodies = new List<Collider>();
+		otherBodies.AddRange(Physics.OverlapSphere(transform.position, overlapCollider.radius, BodyMask));
+		otherBodies.Remove(bodyCollider);
+		if (otherBodies.Count > 0)
+			return false;
+
+		// Align position along grid
+		Vector3 position = transform.position;
+		position.x = (position.x + (position.x > 0f ? 0.5f : -0.5f));
+		position.y = (position.y + (position.y > 0f ? 0.5f : -0.5f));
+		position.x = ((int)(position.x * 2f)) / 2f;
+		position.y = ((int)(position.y * 2f)) / 2f;
+		transform.position = position;
+
+		// One last check to make sure no more overlaps.
+		otherBodies.Clear();
+		otherBodies.AddRange(Physics.OverlapSphere(transform.position, overlapCollider.radius, BodyMask));
+		otherBodies.Remove(bodyCollider);
+		if (otherBodies.Count > 0)
+			return false;
+
+		// Should be good at this point!
+		Placing = false;
+		return true;
+	}
+
+	/// <summary>
 	/// Simply set the color of all renderers
 	/// </summary>
 	public void SetColor(Color _color)
@@ -131,6 +187,54 @@ public class Block : MonoBehaviour
 		foreach (SpriteRenderer renderer in myRenderers)
 		{
 			renderer.color = _color;
+		}
+	}
+
+	/// <summary>
+	/// Iterates through all icons and toggles their visibility based on setting.
+	/// </summary>
+	public void ShowConnectorIcons(bool _show)
+	{
+		foreach (GameObject icon in connectorIcons)
+		{
+			icon.SetActive(_show);
+		}
+	}
+
+	/// <summary>
+	/// Rotates either clockwise or counter clockwise, cycling from up right down to left.
+	/// </summary>
+	public void Rotate(bool _clockwise)
+	{
+		if (_clockwise)
+		{
+			MyDirection++;
+			if (MyDirection > CardinalDirection.Left)
+				MyDirection = CardinalDirection.Up;
+		}
+		else
+		{
+			MyDirection--;
+			if (MyDirection < CardinalDirection.Up)
+				MyDirection = CardinalDirection.Left;
+		}
+
+		switch (MyDirection)
+		{
+			case CardinalDirection.Up:
+				transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+				break;
+			case CardinalDirection.Right:
+				transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+				break;
+			case CardinalDirection.Down:
+				transform.rotation = Quaternion.Euler(0f, 0f, 180f);
+				break;
+			case CardinalDirection.Left:
+				transform.rotation = Quaternion.Euler(0f, 0f, 270f);
+				break;
+			default:
+				break;
 		}
 	}
 }
