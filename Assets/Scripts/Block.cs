@@ -149,9 +149,6 @@ public class Block : MonoBehaviour
 	/// <returns></returns>
 	public bool PlaceBlockInAir()
 	{
-		// temp until we find a solution for rounding to nearest 0.5
-		// solution: round(num*2)/2
-
 		// First, take note of all nearby other blocks. If any are found, break out early.
 		List<Collider> otherBodies = new List<Collider>();
 		otherBodies.AddRange(Physics.OverlapSphere(transform.position, overlapCollider.radius, BodyMask));
@@ -218,6 +215,32 @@ public class Block : MonoBehaviour
 			if (MyDirection < CardinalDirection.Up)
 				MyDirection = CardinalDirection.Left;
 		}
+
+		switch (MyDirection)
+		{
+			case CardinalDirection.Up:
+				transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+				break;
+			case CardinalDirection.Right:
+				transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+				break;
+			case CardinalDirection.Down:
+				transform.rotation = Quaternion.Euler(0f, 0f, 180f);
+				break;
+			case CardinalDirection.Left:
+				transform.rotation = Quaternion.Euler(0f, 0f, 270f);
+				break;
+			default:
+				break;
+		}
+	}
+
+	/// <summary>
+	/// Hard sets the rotation to the given value and handles alignment.
+	/// </summary>
+	public void SetRotation(CardinalDirection _direction)
+	{
+		MyDirection = _direction;
 
 		switch (MyDirection)
 		{

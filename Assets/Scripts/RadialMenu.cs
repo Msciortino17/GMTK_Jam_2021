@@ -16,6 +16,7 @@ public class RadialMenu : MonoBehaviour
 	public List<Button> RadialButtons = new List<Button>();
 
 	private GameObject lastChosenPrefab;
+	private bool selectingColor;
 
 	public bool IsActive
 	{
@@ -36,12 +37,19 @@ public class RadialMenu : MonoBehaviour
 		if (!IsActive)
 		{
 			// Right click to open the menu
-			if (Input.GetKeyDown(KeyCode.Mouse1) && !BlockBuilderRef.HasBlockSelected)
+			if (Input.GetKeyDown(KeyCode.Mouse1) && !BlockBuilderRef.HasBlockSelected && BlockBuilderRef.GhostHeldTimer < 0f)
 			{
-				SoundEffectsRef.PlayClick();
-				SetActive(true);
-				PushRadial(RootRadial);
-				myRectTransform.position = Input.mousePosition;
+				if (IsActive)
+				{
+					BackButton();
+				}
+				else
+				{
+					SoundEffectsRef.PlayClick();
+					SetActive(true);
+					PushRadial(RootRadial);
+					myRectTransform.position = Input.mousePosition;
+				}
 			}
 		}
 		else
@@ -101,14 +109,27 @@ public class RadialMenu : MonoBehaviour
 		MenuRadial menuRadial = RadialStack.Peek();
 		for (int i = 0; i < 8; i++)
 		{
+			if (selectingColor)
+			{
+				RadialButtons[i].gameObject.SetActive(true);
+				RadialButtons[i].GetComponent<Image>().color = BlockBuilderRef.PossibleColors[i];
+				RadialButtons[i].GetComponentInChildren<Text>().text = "";
+				continue;
+			}
+			else
+			{
+				RadialButtons[i].GetComponent<Image>().color = BlockBuilderRef.PossibleColors[0];
+			}
+
 			if (i >= menuRadial.Options.Count)
 			{
 				RadialButtons[i].gameObject.SetActive(false);
 				continue;
 			}
+
 			RadialButtons[i].gameObject.SetActive(true);
 			string name = menuRadial.Options[i].name;
-			name.Replace('_', ' ');
+			name = name.Replace('_', ' ');
 			RadialButtons[i].GetComponentInChildren<Text>().text = name;
 		}
 	}
@@ -120,6 +141,15 @@ public class RadialMenu : MonoBehaviour
 	public void PressRadialButton(int _buttonIndex)
 	{
 		SoundEffectsRef.PlayClick();
+
+		if (selectingColor)
+		{
+			BlockBuilderRef.CurrentColor = _buttonIndex;
+			selectingColor = false;
+			RefreshButtons();
+			return;
+		}
+
 		MenuRadial menuRadial = RadialStack.Peek();
 		Object radialChoice = menuRadial.Options[_buttonIndex];
 
@@ -142,6 +172,10 @@ public class RadialMenu : MonoBehaviour
 					BlockBuilderRef.CreateBlockGhost(lastChosenPrefab);
 					RadialStack.Clear();
 					SetActive(false);
+					return;
+				case SpecialCommandOption.SetColor:
+					selectingColor = true;
+					RefreshButtons();
 					return;
 				default:
 					return;

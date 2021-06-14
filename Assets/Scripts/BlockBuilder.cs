@@ -9,16 +9,18 @@ public class BlockBuilder : MonoBehaviour
 	public LayerMask PositiveMask;
 	public LayerMask NegativeMask;
 
-	public List<GameObject> BlockPrefabs = new List<GameObject>();
 	private Block BlockGhost;
 	public List<Block> ExistingBlocks = new List<Block>();
 	public List<Color> PossibleColors;
 
 	public bool ShowIcons;
-	public int CurrentBlock;
 	public int CurrentColor;
+	public CardinalDirection CurrentDirection;
 
 	public SoundEffects MySoundEffects;
+
+	public float GhostHeldTimer;
+	public RadialMenu RadialMenuRef;
 
 	[Header("Camera")]
 	public float MinCameraZoom;
@@ -27,6 +29,7 @@ public class BlockBuilder : MonoBehaviour
 	public CinemachineVirtualCamera myVirtualCamera;
 	public CinemachineBasicMultiChannelPerlin myCameraShake;
 	private bool disableZoom;
+	private bool disablePan;
 	public float PanningSpeed;
 	private Vector3 mouseDelta;
 	private Vector3 prevMouse;
@@ -41,6 +44,12 @@ public class BlockBuilder : MonoBehaviour
 	void Start()
 	{
 		ExistingBlocks.AddRange(transform.GetComponentsInChildren<Block>());
+		foreach (Block block in ExistingBlocks)
+		{
+			block.ShowConnectorIcons(ShowIcons);
+			block.SetColor(PossibleColors[CurrentColor]);
+		}
+
 		mainCamera = Camera.main;
 		myCameraShake = myVirtualCamera.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
 	}
@@ -74,7 +83,7 @@ public class BlockBuilder : MonoBehaviour
 		if (!HasBlockSelected)
 		{
 			// Left click to pickup existing blocks
-			if (Input.GetKeyDown(KeyCode.Mouse0))
+			if (Input.GetKeyDown(KeyCode.Mouse0) && !RadialMenuRef.IsActive)
 			{
 				Collider[] hits = Physics.OverlapSphere(GetMouseWorld(), 0.1f, BodyMask);
 				if (hits.Length == 0)
@@ -83,17 +92,20 @@ public class BlockBuilder : MonoBehaviour
 				BlockGhost = hits[0].transform.parent.GetComponent<Block>();
 				BlockGhost.Placing = true;
 			}
+
+			GhostHeldTimer -= Time.deltaTime;
 		}
 		else
 		{
+			GhostHeldTimer = 0.25f;
+
 			// Always have the ghost follow the mouse
 			BlockGhost.transform.position = GetMouseWorld();
 
 			// The mouse wheel can be used to change color and currently selected block
 			float mouseWheel = Input.GetAxis("Mouse ScrollWheel");
 			bool changeColor = Input.GetKey(KeyCode.C);
-			bool changeBlock = Input.GetKey(KeyCode.B);
-			disableZoom = changeColor || changeBlock;
+			disableZoom = changeColor;
 			if (mouseWheel > 0.01f)
 			{
 				if (changeColor)
@@ -102,13 +114,6 @@ public class BlockBuilder : MonoBehaviour
 					if (CurrentColor >= PossibleColors.Count)
 						CurrentColor = 0;
 					BlockGhost.SetColor(PossibleColors[CurrentColor]);
-				}
-				else if (changeBlock)
-				{
-					//CurrentBlock++;
-					//if (CurrentBlock >= BlockPrefabs.Count)
-					//	CurrentBlock = 0;
-					//RefreshBlockObject();
 				}
 			}
 			else if (mouseWheel < -0.01f)
@@ -119,13 +124,6 @@ public class BlockBuilder : MonoBehaviour
 					if (CurrentColor < 0)
 						CurrentColor = PossibleColors.Count - 1;
 					BlockGhost.SetColor(PossibleColors[CurrentColor]);
-				}
-				else if (changeBlock)
-				{
-					//CurrentBlock--;
-					//if (CurrentBlock < 0)
-					//	CurrentBlock = BlockPrefabs.Count - 1;
-					//RefreshBlockObject();
 				}
 			}
 
@@ -156,7 +154,9 @@ public class BlockBuilder : MonoBehaviour
 			// R to rotate
 			if (Input.GetKeyDown(KeyCode.R))
 			{
-				BlockGhost.Rotate(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift));
+				bool counterClockwise = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+				BlockGhost.Rotate(counterClockwise);
+				CurrentDirection = BlockGhost.MyDirection;
 			}
 		}
 	}
@@ -169,6 +169,7 @@ public class BlockBuilder : MonoBehaviour
 		BlockGhost = Instantiate(_prefab, GetMouseWorld(), Quaternion.identity, transform).GetComponent<Block>();
 		BlockGhost.InitBlock(this);
 		BlockGhost.SetColor(PossibleColors[CurrentColor]);
+		BlockGhost.SetRotation(CurrentDirection);
 		ExistingBlocks.Add(BlockGhost);
 	}
 
@@ -196,7 +197,7 @@ public class BlockBuilder : MonoBehaviour
 		}
 
 		// Camera pan
-		bool panning = Input.GetKey(KeyCode.Mouse2);
+		bool panning = Input.GetKey(KeyCode.Mouse0) && BlockGhost == null;
 		Cursor.visible = !panning;
 		if (panning)
 		{
@@ -236,20 +237,6 @@ public class BlockBuilder : MonoBehaviour
 				myCameraShake.m_FrequencyGain = 0f;
 			}
 		}
-	}
-
-	/// <summary>
-	/// Destroy the current block and replace it with a new one.
-	/// </summary>
-	private void RefreshBlockObject()
-	{
-		ExistingBlocks.Remove(BlockGhost);
-		Destroy(BlockGhost.gameObject);
-		GameObject prefab = BlockPrefabs[CurrentBlock];
-		BlockGhost = Instantiate(prefab, GetMouseWorld(), Quaternion.identity, transform).GetComponent<Block>();
-		BlockGhost.InitBlock(this);
-		BlockGhost.SetColor(PossibleColors[CurrentColor]);
-		ExistingBlocks.Add(BlockGhost);
 	}
 
 	/// <summary>

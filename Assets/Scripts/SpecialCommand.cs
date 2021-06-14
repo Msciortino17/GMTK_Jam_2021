@@ -11,4 +11,5 @@ public class SpecialCommand : ScriptableObject
 public enum SpecialCommandOption
 {
 	CreateLastBlock,
+	SetColor,
 }
